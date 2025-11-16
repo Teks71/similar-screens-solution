@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "telegram-bot"
+version = "0.1.0"
+description = "Telegram bot for similar-screens solution"
+requires-python = ">=3.11"
+dependencies = [
+    "aiogram>=3.0.0",
+    "httpx",
+    "contracts",
+]
+
+[tool.setuptools]
+packages = ["telegram_bot"]
