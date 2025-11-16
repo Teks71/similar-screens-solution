@@ -1,5 +1,8 @@
-## ADDED Requirements
+# backend Specification
 
+## Purpose
+TBD - created by archiving change add-telegram-similar-gallery. Update Purpose after archive.
+## Requirements
 ### Requirement: Similarity search endpoint accepts MinIO references
 The backend MUST expose a POST `/similar` endpoint that reads a request pointing to a screenshot stored in MinIO.
 
@@ -20,3 +23,4 @@ The backend MUST notify clients when the source screenshot cannot be read from M
 #### Scenario: Reports missing object
 - **WHEN** the referenced MinIO object cannot be fetched or is missing
 - **THEN** `/similar` responds with an error payload explaining the missing object and does not return partial similarity results
+

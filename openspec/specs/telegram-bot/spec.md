@@ -1,5 +1,8 @@
-## ADDED Requirements
+# telegram-bot Specification
 
+## Purpose
+TBD - created by archiving change add-telegram-similar-gallery. Update Purpose after archive.
+## Requirements
 ### Requirement: Bot handles photo uploads and stores them in MinIO
 The Telegram bot MUST accept user photo messages, pick the best-quality version, and upload it to MinIO with a unique key.
 
@@ -27,3 +30,4 @@ The bot MUST inform users when uploads or similarity requests fail.
 #### Scenario: Notifies about processing errors
 - **WHEN** MinIO upload, backend call, or response parsing fails
 - **THEN** the bot sends a clear error message explaining the failure and suggests retrying later
+
