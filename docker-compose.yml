@@ -1,0 +1,35 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend-service/Dockerfile
+    env_file:
+      - .env
+    environment:
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_USER_BUCKET: ${MINIO_USER_BUCKET}
+      MINIO_SECURE: ${MINIO_SECURE:-false}
+    ports:
+      - "${BACKEND_HOST:-0.0.0.0}:${BACKEND_PORT:-8000}:8000"
+
+  telegram-bot:
+    build:
+      context: .
+      dockerfile: telegram-bot/Dockerfile
+    env_file:
+      - .env
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      BACKEND_BASE_URL: ${BACKEND_BASE_URL:-http://backend:8000}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_USER_BUCKET: ${MINIO_USER_BUCKET}
+      MINIO_SECURE: ${MINIO_SECURE:-false}
+      SIMILAR_TOP_K: ${SIMILAR_TOP_K:-5}
+    depends_on:
+      - backend
