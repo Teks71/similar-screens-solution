@@ -1,31 +1,42 @@
 # Project Context
 
 ## Purpose
-[Describe your project's purpose and goals]
+Монорепозиторий на Python для сервиса «similar-screens-solution». Содержит единый источник Pydantic-контрактов, простой FastAPI-бэкенд и Telegram-бот, которые совместно предоставляют базовый API и интерфейс взаимодействия.
 
 ## Tech Stack
-- [List your primary technologies]
-- [e.g., TypeScript, React, Node.js]
+- Python 3.11+
+- uv workspace для менеджмента зависимостей и разработки
+- FastAPI + Pydantic v2 для бэкенда и контрактов
+- aiogram 3 для Telegram-бота
+- httpx для HTTP-вызовов из бота
 
 ## Project Conventions
 
 ### Code Style
-[Describe your code style preferences, formatting rules, and naming conventions]
+- Строгая типизация, явные `response_model` в FastAPI.
+- Контракты описываются только в `contracts/contracts`, логики там быть не должно.
+- Для разных методов контракта допускается разбивать модели по нескольким подпапкам и файлам; не складывайте все Pydantic-модели в один модуль.
+- Бизнес-логика бота и бэкенда опирается на модели из `contracts`.
+- Импорты моделей через `from contracts.dto import ...`.
 
 ### Architecture Patterns
-[Document your architectural decisions and patterns]
+- uv-workspace с тремя проектами: `contracts` (модели), `backend-service` (API), `telegram-bot` (клиентское взаимодействие).
+- Все изменения API или данных начинаются с обновления моделей в `contracts`, далее синхронизация потребителей.
+- Бэкенд реализуется поверх FastAPI, бот — поверх aiogram.
 
 ### Testing Strategy
-[Explain your testing approach and requirements]
+- Минимальные проверки пока включают базовый health-check; при добавлении функциональности требуются тесты, отражающие ожидаемое поведение API и использования контрактов.
 
 ### Git Workflow
-[Describe your branching strategy and commit conventions]
+- Стандартный git-flow не зафиксирован; коммиты должны быть осмысленными и отражать сделанные изменения.
 
 ## Domain Context
-[Add domain-specific knowledge that AI assistants need to understand]
+- Сервис предоставляет базовый эндпоинт `/health` и бот-команду `/start`, служащие каркасом для дальнейшего расширения функциональности сравнения экранов.
 
 ## Important Constraints
-[List any technical, business, or regulatory constraints]
+- Нельзя создавать новые пакеты вне uv-workspace и дублировать модели вне `contracts`.
+- Добавление зависимостей требует обновления соответствующих `pyproject.toml` внутри проектов.
+- Новые структуры данных или API нужно сначала вводить в `contracts`.
 
 ## External Dependencies
-[Document key external services, APIs, or systems]
+- Telegram Bot API (требуется токен в переменной окружения `TELEGRAM_BOT_TOKEN`).
