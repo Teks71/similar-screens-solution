@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import AnyHttpUrl, BaseModel, Field
+from pydantic import BaseModel, Field
 
 
 class HealthStatus(BaseModel):
@@ -22,11 +22,10 @@ class SimilarRequest(BaseModel):
 
 class SimilarResult(BaseModel):
     score: float = Field(..., description="Similarity score in descending order")
-    title: Optional[str] = Field(default=None, description="Optional human-friendly title for the match")
-    url: Optional[AnyHttpUrl] = Field(default=None, description="Direct URL to the similar item if available")
+    title: Optional[str] = Field(default=None, description="Optional human-friendly title for the match")    
     object: Optional[MinioObjectReference] = Field(
         default=None,
-        description="MinIO reference for the similar object when a direct URL is not provided",
+        description="MinIO reference for the similar object",
     )
 
 

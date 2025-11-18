@@ -974,11 +974,18 @@ wheels = [
 name = "similar-screens-solution"
 version = "0.1.0"
 source = { virtual = "." }
+dependencies = [
+    { name = "backend-service" },
+    { name = "contracts" },
+    { name = "telegram-bot" },
+]
 
 [package.metadata]
-
-[package.metadata.requires-dev]
-dev = []
+requires-dist = [
+    { name = "backend-service", editable = "backend-service" },
+    { name = "contracts", editable = "contracts" },
+    { name = "telegram-bot", editable = "telegram-bot" },
+]
 
 [[package]]
 name = "sniffio"

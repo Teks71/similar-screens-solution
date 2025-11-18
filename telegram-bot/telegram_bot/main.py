@@ -205,9 +205,7 @@ async def build_media_group(
 ) -> list[types.InputMediaPhoto]:
     media: list[types.InputMediaPhoto] = []
     for result in results:
-        url = result.url
-        if url is None:
-            url = await _presign_if_needed(result.object, minio_client)
+        url = await _presign_if_needed(result.object, minio_client)
 
         if url is None:
             continue

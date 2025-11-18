@@ -2,10 +2,11 @@
 name = "similar-screens-solution"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = []
-
-[tool.uv]
-dev-dependencies = []
+dependencies = [
+    "contracts",
+    "backend-service",
+    "telegram-bot",
+]
 
 [tool.uv.workspace]
 members = [
@@ -15,4 +16,6 @@ members = [
 ]
 
 [tool.uv.sources]
-contracts = { workspace = true }
+contracts     = { workspace = true }
+backend-service = { workspace = true }
+telegram-bot  = { workspace = true }
