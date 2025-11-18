@@ -1,7 +1,6 @@
-- [ ] Backend: log `/similar` HTTP requests, including request body and key metadata (method, path, status, duration).
-- [ ] Backend: log errors with request context for both globally unhandled exceptions and locally caught failures (e.g., MinIO access, similarity search).
-- [ ] Telegram bot: log incoming updates (including message text, chat/user identifiers, and MinIO object references when present).
-- [ ] Telegram bot: log outgoing responses (media groups and error messages) with correlation to the triggering update.
-- [ ] Telegram bot: log errors with update context for both global error handlers and locally caught exceptions around MinIO and backend calls.
+- [x] Backend: log `/similar` HTTP requests, including request body and key metadata (method, path, status, duration).
+- [x] Backend: log errors with request context for both globally unhandled exceptions and locally caught failures (e.g., MinIO access, similarity search).
+- [x] Telegram bot: log incoming updates (including message text, chat/user identifiers, and MinIO object references when present).
+- [x] Telegram bot: log outgoing responses (media groups and error messages) with correlation to the triggering update.
+- [x] Telegram bot: log errors with update context for both global error handlers and locally caught exceptions around MinIO and backend calls.
 - [ ] Validate logging in a development environment and adjust configuration/documentation if required.
-

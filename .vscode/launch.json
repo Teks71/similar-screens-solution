@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Telegram Bot (module)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "telegram_bot.main",
+      "console": "integratedTerminal",
+
+      "cwd": "${workspaceFolder}",
+
+      "envFile": "${workspaceFolder}/.env.dev",
+      "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "justMyCode": false,
+      "subProcess": true
+    }
+  ]
+}

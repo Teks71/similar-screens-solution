@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from datetime import timedelta
 from functools import lru_cache
 
@@ -8,6 +9,9 @@ from minio.error import S3Error
 
 from contracts.dto import MinioObjectReference
 from .config import BackendSettings, get_settings
+
+
+logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
@@ -24,38 +28,127 @@ def provide_minio_client(settings: BackendSettings = Depends(get_settings)) -> M
     return get_minio_client(settings)
 
 
-async def ensure_bucket(client: Minio, bucket: str) -> None:
-    exists = await asyncio.to_thread(client.bucket_exists, bucket)
+async def ensure_bucket(client: Minio, bucket: str, *, correlation_id: str | None = None) -> None:
+    try:
+        exists = await asyncio.to_thread(client.bucket_exists, bucket)
+    except S3Error as exc:
+        logger.exception(
+            "Error checking bucket existence",
+            extra={
+                "event": "backend.storage.ensure_bucket.error",
+                "correlation_id": correlation_id,
+                "bucket": bucket,
+                "operation": "bucket_exists",
+                "error_code": getattr(exc, "code", None),
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Storage access error",
+        )
+
     if not exists:
-        await asyncio.to_thread(client.make_bucket, bucket)
+        try:
+            await asyncio.to_thread(client.make_bucket, bucket)
+            logger.info(
+                "Created missing bucket",
+                extra={
+                    "event": "backend.storage.ensure_bucket.created",
+                    "correlation_id": correlation_id,
+                    "bucket": bucket,
+                },
+            )
+        except S3Error as exc:
+            logger.exception(
+                "Error creating bucket",
+                extra={
+                    "event": "backend.storage.ensure_bucket.create_error",
+                    "correlation_id": correlation_id,
+                    "bucket": bucket,
+                    "operation": "make_bucket",
+                    "error_code": getattr(exc, "code", None),
+                },
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Storage access error",
+            )
 
 
-async def verify_source_object(client: Minio, reference: MinioObjectReference) -> None:
+async def verify_source_object(
+    client: Minio,
+    reference: MinioObjectReference,
+    *,
+    correlation_id: str | None = None,
+) -> None:
     response = None
     try:
         response = await asyncio.to_thread(client.get_object, reference.bucket, reference.object_key)
         await asyncio.to_thread(response.read, 1)
     except S3Error as exc:
+        logger.warning(
+            "Error verifying source object in storage",
+            extra={
+                "event": "backend.storage.verify_source_object.error",
+                "correlation_id": correlation_id,
+                "bucket": reference.bucket,
+                "object_key": reference.object_key,
+                "error_code": getattr(exc, "code", None),
+            },
+        )
         if exc.code == "NoSuchKey":
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Source object not found in storage",
             )
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        )
     finally:
         if response is not None:
             try:
                 response.close()
                 response.release_conn()
             except Exception:
-                pass
+                logger.debug(
+                    "Error while cleaning up MinIO response",
+                    exc_info=True,
+                    extra={
+                        "event": "backend.storage.verify_source_object.cleanup_error",
+                        "correlation_id": correlation_id,
+                        "bucket": reference.bucket,
+                        "object_key": reference.object_key,
+                    },
+                )
 
 
-async def presign_url(client: Minio, reference: MinioObjectReference) -> str:
-    return await asyncio.to_thread(
-        client.get_presigned_url,
-        "GET",
-        reference.bucket,
-        reference.object_key,
-        expires=timedelta(hours=1),
-    )
+async def presign_url(
+    client: Minio,
+    reference: MinioObjectReference,
+    *,
+    correlation_id: str | None = None,
+) -> str:
+    try:
+        return await asyncio.to_thread(
+            client.get_presigned_url,
+            "GET",
+            reference.bucket,
+            reference.object_key,
+            expires=timedelta(hours=1),
+        )
+    except S3Error as exc:
+        logger.exception(
+            "Error generating presigned URL",
+            extra={
+                "event": "backend.storage.presign_url.error",
+                "correlation_id": correlation_id,
+                "bucket": reference.bucket,
+                "object_key": reference.object_key,
+                "error_code": getattr(exc, "code", None),
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate presigned URL",
+        )
