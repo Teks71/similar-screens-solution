@@ -21,6 +21,9 @@ class BackendSettings:
 
     PostgreSQL connection settings are sourced from env vars to comply with 12-factor
     configuration; a DSN may be provided directly or derived from individual parts.
+
+    Qdrant connection settings are also sourced from env vars; collection parameters
+    must be provided to allow startup initialization/validation.
     """
 
     def __init__(self) -> None:
@@ -37,6 +40,12 @@ class BackendSettings:
         self.postgres_password = os.getenv("POSTGRES_PASSWORD")
         self.postgres_url = os.getenv("POSTGRES_URL") or self._build_postgres_url()
 
+        self.qdrant_url = os.getenv("QDRANT_URL")
+        self.qdrant_api_key = os.getenv("QDRANT_API_KEY")
+        self.qdrant_collection = os.getenv("QDRANT_COLLECTION")
+        self.qdrant_distance = os.getenv("QDRANT_DISTANCE", "cosine").lower()
+        self.qdrant_vector_size = self._int_from_env("QDRANT_VECTOR_SIZE")
+
         missing = [
             key
             for key, value in {
@@ -44,6 +53,8 @@ class BackendSettings:
                 "MINIO_ACCESS_KEY": self.minio_access_key,
                 "MINIO_SECRET_KEY": self.minio_secret_key,
                 "MINIO_USER_BUCKET": self.minio_user_bucket,
+                "QDRANT_URL": self.qdrant_url,
+                "QDRANT_COLLECTION": self.qdrant_collection,
             }.items()
             if not value
         ]
@@ -52,6 +63,9 @@ class BackendSettings:
             missing.append(
                 "POSTGRES_URL or POSTGRES_HOST/POSTGRES_PORT/POSTGRES_DB/POSTGRES_USER/POSTGRES_PASSWORD"
             )
+
+        if self.qdrant_vector_size is None:
+            missing.append("QDRANT_VECTOR_SIZE (int)")
 
         if missing:
             raise RuntimeError(f"Missing required backend settings: {', '.join(sorted(missing))}")
@@ -70,6 +84,15 @@ class BackendSettings:
             f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
+
+    def _int_from_env(self, key: str) -> int | None:
+        raw = os.getenv(key)
+        if raw is None:
+            return None
+        try:
+            return int(raw)
+        except ValueError as exc:
+            raise RuntimeError(f"{key} must be an integer") from exc
 
 
 @lru_cache(maxsize=1)

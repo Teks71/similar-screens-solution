@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16
@@ -38,6 +36,10 @@ services:
       MINIO_USER_BUCKET: ${MINIO_USER_BUCKET}
       MINIO_SECURE: ${MINIO_SECURE:-false}
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-screens}
+      QDRANT_VECTOR_SIZE: ${QDRANT_VECTOR_SIZE:-768}
+      QDRANT_DISTANCE: ${QDRANT_DISTANCE:-cosine}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
       POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
       POSTGRES_DB: ${POSTGRES_DB:-similar_screens}
