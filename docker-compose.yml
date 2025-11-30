@@ -1,6 +1,14 @@
 version: "3.9"
 
 services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "${QDRANT_HTTP_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_PORT:-6334}:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+
   backend:
     build:
       context: .
@@ -13,8 +21,11 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_USER_BUCKET: ${MINIO_USER_BUCKET}
       MINIO_SECURE: ${MINIO_SECURE:-false}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
     ports:
       - "${BACKEND_HOST:-0.0.0.0}:${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      - qdrant
 
   telegram-bot:
     build:
@@ -33,3 +44,6 @@ services:
       SIMILAR_TOP_K: ${SIMILAR_TOP_K:-5}
     depends_on:
       - backend
+
+volumes:
+  qdrant_storage:

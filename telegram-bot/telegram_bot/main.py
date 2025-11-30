@@ -5,6 +5,7 @@ from datetime import timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Optional, Sequence
+from urllib.parse import urlparse
 
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command, CommandStart
@@ -50,6 +51,14 @@ def _message_context(message: types.Message) -> dict:
         "caption": message.caption,
         "has_photo": bool(message.photo),
     }
+
+
+def _is_valid_http_url(value: str) -> bool:
+    try:
+        parsed = urlparse(value)
+        return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+    except Exception:
+        return False
 
 
 async def ensure_bucket(client: Minio, bucket: str) -> None:
@@ -204,20 +213,54 @@ async def build_media_group(
     minio_client: Minio,
 ) -> list[types.InputMediaPhoto]:
     media: list[types.InputMediaPhoto] = []
-    for result in results:
-        url = await _presign_if_needed(result.object, minio_client)
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as fetch_client:
+        for idx, result in enumerate(results):
+            url_value = result.url or await _presign_if_needed(result.object, minio_client)
 
-        if url is None:
-            continue
+            if url_value is None:
+                continue
 
-        caption_parts = []
-        if result.title:
-            caption_parts.append(result.title)
-        if result.score is not None:
-            caption_parts.append(f"score: {result.score:.2f}")
-        caption = " | ".join(caption_parts) if caption_parts else "Похожий экран"
+            url = str(url_value)
+            if not _is_valid_http_url(url):
+                logger.warning(
+                    "Skipping invalid URL in similarity result",
+                    extra={
+                        "event": "bot.response.media_group.invalid_url",
+                        "url": url_value,
+                        "title": result.title,
+                    },
+                )
+                continue
 
-        media.append(types.InputMediaPhoto(media=str(url), caption=caption))
+            try:
+                response = await fetch_client.get(url)
+                response.raise_for_status()
+                content = response.content
+            except Exception:
+                logger.warning(
+                    "Failed to fetch image for media group",
+                    exc_info=True,
+                    extra={
+                        "event": "bot.response.media_group.fetch_failed",
+                        "url": url,
+                        "title": result.title,
+                    },
+                )
+                continue
+
+            caption_parts = []
+            if result.title:
+                caption_parts.append(result.title)
+            if result.score is not None:
+                caption_parts.append(f"score: {result.score:.2f}")
+            caption = " | ".join(caption_parts) if caption_parts else "Похожий экран"
+
+            media.append(
+                types.InputMediaPhoto(
+                    media=types.BufferedInputFile(content, filename=f"similar-{idx}.jpg"),
+                    caption=caption,
+                )
+            )
 
     return media
 
@@ -360,14 +403,17 @@ async def main() -> None:
             await handle_photo_message(message, bot, http_client, minio_client, settings)
 
         @dp.errors()
-        async def global_error_handler(update: types.Update, exception: Exception) -> None:
+        async def global_error_handler(update: types.Update, exception: BaseException | None = None) -> None:
             message_obj = getattr(update, "message", None)
             context = {
                 "event": "bot.error.unhandled",
                 "update_id": getattr(update, "update_id", None),
+                "exception_type": type(exception).__name__ if exception else None,
             }
             if isinstance(message_obj, types.Message):
                 context.update(_message_context(message_obj))
+            if exception is not None:
+                context["exception_message"] = str(exception)
 
             logger.exception(
                 "Unhandled error while processing update",

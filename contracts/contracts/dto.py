@@ -23,6 +23,10 @@ class SimilarRequest(BaseModel):
 class SimilarResult(BaseModel):
     score: float = Field(..., description="Similarity score in descending order")
     title: Optional[str] = Field(default=None, description="Optional human-friendly title for the match")    
+    url: Optional[str] = Field(
+        default=None,
+        description="Directly retrievable URL for the similar object",
+    )
     object: Optional[MinioObjectReference] = Field(
         default=None,
         description="MinIO reference for the similar object",

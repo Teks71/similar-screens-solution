@@ -59,7 +59,9 @@ async def find_similar(
 
         await ensure_bucket(client, request.source.bucket, correlation_id=correlation_id)
         await verify_source_object(client, request.source, correlation_id=correlation_id)
-        presigned_url = await presign_url(client, request.source, correlation_id=correlation_id)
+        presigned_url = str(
+            await presign_url(client, request.source, correlation_id=correlation_id)
+        )
 
         score = 1.0
         results = [
