@@ -27,6 +27,13 @@ class BackendSettings:
         self.minio_user_bucket = os.getenv("MINIO_USER_BUCKET") or os.getenv("MINIO_BUCKET")
         self.minio_secure = _bool_from_env("MINIO_SECURE", default=False)
 
+        self.postgres_host = os.getenv("POSTGRES_HOST")
+        self.postgres_port = os.getenv("POSTGRES_PORT")
+        self.postgres_db = os.getenv("POSTGRES_DB")
+        self.postgres_user = os.getenv("POSTGRES_USER")
+        self.postgres_password = os.getenv("POSTGRES_PASSWORD")
+        self.postgres_url = os.getenv("POSTGRES_URL") or self._build_postgres_url()
+
         missing = [
             key
             for key, value in {
@@ -40,6 +47,21 @@ class BackendSettings:
 
         if missing:
             raise RuntimeError(f"Missing required backend settings: {', '.join(sorted(missing))}")
+
+    def _build_postgres_url(self) -> str | None:
+        parts = (
+            self.postgres_host,
+            self.postgres_port,
+            self.postgres_db,
+            self.postgres_user,
+            self.postgres_password,
+        )
+        if not all(parts):
+            return None
+        return (
+            f"postgresql://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
 
 
 @lru_cache(maxsize=1)
