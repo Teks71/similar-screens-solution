@@ -9,3 +9,7 @@ The backend MUST be deployable with PostgreSQL via Docker Compose and accept env
 #### Scenario: Backend reads PostgreSQL connection settings from environment
 - **WHEN** the backend container starts
 - **THEN** it receives PostgreSQL connection parameters (host, port, database, user, password, and optionally a full DSN) from environment variables defined in the deployment configuration.
+
+#### Scenario: Backend initializes SQLAlchemy using env-supplied Postgres DSN
+- **WHEN** the backend starts
+- **THEN** it constructs an async SQLAlchemy engine/session using the Postgres DSN from environment variables, fails fast when configuration is missing, and successfully pings the database during startup.

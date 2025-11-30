@@ -18,6 +18,9 @@ class BackendSettings:
     `MINIO_USER_BUCKET` (or legacy `MINIO_BUCKET`) holds user-uploaded screenshots that
     are used to search for similar content. Additional buckets may be introduced for
     original or derived assets later, so this value specifically targets user uploads.
+
+    PostgreSQL connection settings are sourced from env vars to comply with 12-factor
+    configuration; a DSN may be provided directly or derived from individual parts.
     """
 
     def __init__(self) -> None:
@@ -45,6 +48,11 @@ class BackendSettings:
             if not value
         ]
 
+        if not self.postgres_url:
+            missing.append(
+                "POSTGRES_URL or POSTGRES_HOST/POSTGRES_PORT/POSTGRES_DB/POSTGRES_USER/POSTGRES_PASSWORD"
+            )
+
         if missing:
             raise RuntimeError(f"Missing required backend settings: {', '.join(sorted(missing))}")
 
@@ -59,7 +67,7 @@ class BackendSettings:
         if not all(parts):
             return None
         return (
-            f"postgresql://{self.postgres_user}:{self.postgres_password}"
+            f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 

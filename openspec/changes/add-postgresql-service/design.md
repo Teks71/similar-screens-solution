@@ -2,12 +2,13 @@
 The deployment currently provisions Qdrant and MinIO but lacks a relational database. We need PostgreSQL available for future persistence and metadata while keeping configuration consistent across `.env` templates and Docker Compose.
 
 ## Goals / Non-Goals
-- Goals: add a PostgreSQL service with persistent storage; define environment variables for backend DB connectivity; express backend dependencies on Qdrant and PostgreSQL in Compose.
-- Non-Goals: schema design, migrations, or code-level database interactions.
+- Goals: add a PostgreSQL service with persistent storage; define environment variables for backend DB connectivity; express backend dependencies on Qdrant and PostgreSQL in Compose; wire the backend with SQLAlchemy (async) using 12-factor env configuration and a startup connectivity check.
+- Non-Goals: schema design, migrations, or domain-level database interactions beyond connectivity scaffolding.
 
 ## Decisions
 - Use the official `postgres:16` image with a named volume for data durability in local/dev environments.
-- Expose credentials via env vars (`POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, optional `POSTGRES_URL`) and pass them into the backend service.
+- Expose credentials via env vars (`POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, optional `POSTGRES_URL`) and pass them into the backend service; reuse the same `POSTGRES_DB` for Postgres bootstrap.
+- Use SQLAlchemy async engine/session with `asyncpg` driver and fail-fast configuration loading on backend startup; include a startup ping to verify connectivity.
 - Keep backend wired to Qdrant; update `depends_on` to include both `qdrant` and `postgres` for clear startup ordering.
 
 ## Risks / Trade-offs

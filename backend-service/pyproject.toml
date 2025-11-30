@@ -12,6 +12,8 @@ dependencies = [
     "uvicorn[standard]",
     "contracts",
     "minio",
+    "sqlalchemy[asyncio]",
+    "asyncpg",
 ]
 
 [tool.setuptools]

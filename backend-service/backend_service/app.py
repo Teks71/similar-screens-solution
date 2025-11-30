@@ -6,10 +6,21 @@ from fastapi import Depends, FastAPI, HTTPException, Request, status
 
 from contracts.dto import HealthStatus, SimilarRequest, SimilarResponse, SimilarResult
 from .config import BackendSettings, get_settings
+from .database import close_database, ping_database
 from .storage import ensure_bucket, presign_url, provide_minio_client, verify_source_object
 
 app = FastAPI(title="Similar Screens Backend")
 logger = logging.getLogger(__name__)
+
+
+@app.on_event("startup")
+async def startup() -> None:
+    await ping_database()
+
+
+@app.on_event("shutdown")
+async def shutdown() -> None:
+    await close_database()
 
 
 @app.get("/health", response_model=HealthStatus)

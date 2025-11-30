@@ -8,6 +8,7 @@
 - Add a PostgreSQL service to `docker-compose.yml` with persistent storage and configurable credentials.
 - Extend backend environment configuration to include PostgreSQL connection parameters/DSN and document them in env templates.
 - Update the backend service in Compose to depend on both `qdrant` and `postgres` so startup ordering is explicit.
+- Integrate SQLAlchemy-based Postgres connectivity in the backend using 12-factor env configuration (async engine/session, startup ping).
 
 ## Impact
 - Affected specs: backend
