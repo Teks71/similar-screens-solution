@@ -12,6 +12,9 @@ dependencies = [
     "uvicorn[standard]",
     "contracts",
     "minio",
+    "sqlalchemy[asyncio]",
+    "asyncpg",
+    "qdrant-client",
 ]
 
 [tool.setuptools]

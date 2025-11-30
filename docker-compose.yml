@@ -1,6 +1,20 @@
-version: "3.9"
-
 services:
+  postgres:
+    image: postgres:16
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-similar_screens}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-similar_screens}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   qdrant:
     image: qdrant/qdrant:latest
     ports:
@@ -22,10 +36,21 @@ services:
       MINIO_USER_BUCKET: ${MINIO_USER_BUCKET}
       MINIO_SECURE: ${MINIO_SECURE:-false}
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-screens}
+      QDRANT_VECTOR_SIZE: ${QDRANT_VECTOR_SIZE:-768}
+      QDRANT_DISTANCE: ${QDRANT_DISTANCE:-cosine}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-similar_screens}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_URL: ${POSTGRES_URL:-postgresql+asyncpg://postgres:postgres@postgres:5432/similar_screens}
     ports:
       - "${BACKEND_HOST:-0.0.0.0}:${BACKEND_PORT:-8000}:8000"
     depends_on:
       - qdrant
+      - postgres
 
   telegram-bot:
     build:
@@ -47,3 +72,4 @@ services:
 
 volumes:
   qdrant_storage:
+  postgres_data:
