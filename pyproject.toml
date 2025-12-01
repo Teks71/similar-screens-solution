@@ -6,6 +6,7 @@ dependencies = [
     "contracts",
     "backend-service",
     "telegram-bot",
+    "embedding-service",
 ]
 
 [tool.uv.workspace]
@@ -13,9 +14,11 @@ members = [
     "contracts",
     "backend-service",
     "telegram-bot",
+    "embedding-service",
 ]
 
 [tool.uv.sources]
 contracts     = { workspace = true }
 backend-service = { workspace = true }
 telegram-bot  = { workspace = true }
+embedding-service = { workspace = true }
