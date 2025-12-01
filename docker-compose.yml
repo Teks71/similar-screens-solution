@@ -70,6 +70,28 @@ services:
     depends_on:
       - backend
 
+  embedding-service:
+    build:
+      context: .
+      dockerfile: embedding-service/Dockerfile
+    env_file:
+      - .env
+    environment:
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_ALLOWED_BUCKET: ${MINIO_ALLOWED_BUCKET:-}
+      MINIO_SECURE: ${MINIO_SECURE:-false}
+      EMBEDDING_DEVICE: ${EMBEDDING_DEVICE:-cuda}
+      EMBEDDING_MODEL_NAME: ${EMBEDDING_MODEL_NAME:-dinov2_vitb14}
+    ports:
+      - "${EMBEDDING_HOST:-0.0.0.0}:${EMBEDDING_PORT:-8001}:8001"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: ["gpu"]
+
 volumes:
   qdrant_storage:
   postgres_data:

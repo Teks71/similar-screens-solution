@@ -35,3 +35,13 @@ class SimilarResult(BaseModel):
 
 class SimilarResponse(BaseModel):
     results: list[SimilarResult]
+
+
+class EmbedRequest(BaseModel):
+    source: MinioObjectReference
+
+
+class EmbedResponse(BaseModel):
+    model: str = Field(..., description="Identifier of the embedding model used")
+    dimension: int = Field(..., description="Dimension of the embedding vector")
+    vector: list[float] = Field(..., description="Embedding values in model order")
