@@ -1,4 +1,5 @@
 import asyncio
+import io
 import logging
 from datetime import timedelta
 from functools import lru_cache
@@ -151,4 +152,88 @@ async def presign_url(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to generate presigned URL",
+        )
+
+
+async def fetch_object_bytes(
+    client: Minio,
+    reference: MinioObjectReference,
+    *,
+    correlation_id: str | None = None,
+) -> bytes:
+    response = None
+    try:
+        response = await asyncio.to_thread(client.get_object, reference.bucket, reference.object_key)
+        data = await asyncio.to_thread(response.read)
+        return data
+    except S3Error as exc:
+        logger.warning(
+            "Error fetching object from MinIO",
+            extra={
+                "event": "backend.storage.fetch_object.error",
+                "correlation_id": correlation_id,
+                "bucket": reference.bucket,
+                "object_key": reference.object_key,
+                "error_code": getattr(exc, "code", None),
+            },
+        )
+        if exc.code in {"NoSuchKey", "NoSuchBucket"}:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Source object not found in storage",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Storage access error",
+        )
+    finally:
+        if response is not None:
+            try:
+                response.close()
+                response.release_conn()
+            except Exception:
+                logger.debug(
+                    "Error while cleaning up MinIO response",
+                    exc_info=True,
+                    extra={
+                        "event": "backend.storage.fetch_object.cleanup_error",
+                        "correlation_id": correlation_id,
+                        "bucket": reference.bucket,
+                        "object_key": reference.object_key,
+                    },
+                )
+
+
+async def upload_object_bytes(
+    client: Minio,
+    bucket: str,
+    object_key: str,
+    data: bytes,
+    content_type: str,
+    *,
+    correlation_id: str | None = None,
+) -> None:
+    try:
+        await asyncio.to_thread(
+            client.put_object,
+            bucket,
+            object_key,
+            data=io.BytesIO(data),
+            length=len(data),
+            content_type=content_type,
+        )
+    except S3Error as exc:
+        logger.exception(
+            "Error uploading object to MinIO",
+            extra={
+                "event": "backend.storage.upload_object.error",
+                "correlation_id": correlation_id,
+                "bucket": bucket,
+                "object_key": object_key,
+                "error_code": getattr(exc, "code", None),
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to store processed object",
         )

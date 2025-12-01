@@ -1,9 +1,11 @@
 import asyncio
 import logging
+import uuid
 from typing import Optional
 
 from qdrant_client import QdrantClient
 from qdrant_client.conversions import common_types
+from qdrant_client.http import models as rest
 from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.http.models import Distance, VectorParams
 
@@ -142,3 +144,44 @@ async def close_qdrant_client() -> None:
             _qdrant_client.close()
         finally:
             _qdrant_client = None
+
+
+async def upsert_vector_point(
+    vector: list[float],
+    payload: dict,
+    *,
+    settings: Optional[BackendSettings] = None,
+    point_id: str | int | None = None,
+) -> None:
+    client = get_qdrant_client(settings)
+    settings = settings or get_settings()
+    collection = settings.qdrant_collection
+
+    # Use caller-provided ID when given; otherwise generate deterministic UUIDv5 from known keys
+    if point_id is not None:
+        resolved_id = point_id
+    else:
+        seed = payload.get("processed_key") or payload.get("source_key") or str(uuid.uuid4())
+        resolved_id = str(uuid.uuid5(uuid.NAMESPACE_URL, seed))
+
+    point = rest.PointStruct(
+        id=resolved_id,
+        vector=vector,
+        payload=payload,
+    )
+    try:
+        await asyncio.to_thread(
+            client.upsert,
+            collection_name=collection,
+            points=[point],
+            wait=True,
+        )
+    except Exception:
+        logger.exception(
+            "Failed to upsert point into Qdrant",
+            extra={
+                "event": "backend.qdrant.upsert_failed",
+                "collection": collection,
+            },
+        )
+        raise

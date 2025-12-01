@@ -31,6 +31,7 @@ class BackendSettings:
         self.minio_access_key = os.getenv("MINIO_ACCESS_KEY")
         self.minio_secret_key = os.getenv("MINIO_SECRET_KEY")
         self.minio_user_bucket = os.getenv("MINIO_USER_BUCKET") or os.getenv("MINIO_BUCKET")
+        self.minio_processed_bucket = os.getenv("MINIO_PROCESSED_BUCKET")
         self.minio_secure = _bool_from_env("MINIO_SECURE", default=False)
 
         self.postgres_host = os.getenv("POSTGRES_HOST")
@@ -46,6 +47,8 @@ class BackendSettings:
         self.qdrant_distance = os.getenv("QDRANT_DISTANCE", "cosine").lower()
         self.qdrant_vector_size = self._int_from_env("QDRANT_VECTOR_SIZE")
 
+        self.embedding_service_url = os.getenv("EMBEDDING_SERVICE_URL")
+
         missing = [
             key
             for key, value in {
@@ -53,8 +56,10 @@ class BackendSettings:
                 "MINIO_ACCESS_KEY": self.minio_access_key,
                 "MINIO_SECRET_KEY": self.minio_secret_key,
                 "MINIO_USER_BUCKET": self.minio_user_bucket,
+                "MINIO_PROCESSED_BUCKET": self.minio_processed_bucket,
                 "QDRANT_URL": self.qdrant_url,
                 "QDRANT_COLLECTION": self.qdrant_collection,
+                "EMBEDDING_SERVICE_URL": self.embedding_service_url,
             }.items()
             if not value
         ]

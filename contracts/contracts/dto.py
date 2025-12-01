@@ -45,3 +45,13 @@ class EmbedResponse(BaseModel):
     model: str = Field(..., description="Identifier of the embedding model used")
     dimension: int = Field(..., description="Dimension of the embedding vector")
     vector: list[float] = Field(..., description="Embedding values in model order")
+
+
+class IngestRequest(BaseModel):
+    source: MinioObjectReference
+
+
+class IngestResponse(BaseModel):
+    processed: MinioObjectReference = Field(..., description="Reference to the processed image stored in MinIO")
+    embedding_model: str = Field(..., description="Embedding model used for vectorization")
+    embedding_dimension: int = Field(..., description="Dimension of the stored embedding vector")

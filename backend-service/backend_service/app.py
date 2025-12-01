@@ -4,13 +4,38 @@ import uuid
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 
-from contracts.dto import HealthStatus, SimilarRequest, SimilarResponse, SimilarResult
+from contracts.dto import (
+    HealthStatus,
+    SimilarRequest,
+    SimilarResponse,
+    SimilarResult,
+    IngestRequest,
+    IngestResponse,
+    MinioObjectReference,
+)
 from .config import BackendSettings, get_settings
 from .database import close_database, ping_database
 from .qdrant import close_qdrant_client, init_qdrant_collection
-from .storage import ensure_bucket, presign_url, provide_minio_client, verify_source_object
+from .storage import (
+    ensure_bucket,
+    presign_url,
+    provide_minio_client,
+    verify_source_object,
+    fetch_object_bytes,
+    upload_object_bytes,
+)
+from .image_processing import process_image_bytes, build_processed_key
+from .embed_client import fetch_embedding
+from .qdrant import upsert_vector_point
 
-app = FastAPI(title="Similar Screens Backend")
+app = FastAPI(
+    title="Similar Screens Backend",
+    version="0.1.0",
+    description=(
+        "Service for processing screenshots: ingest from MinIO, preprocess, embed via the embedding service, "
+        "and index vectors in Qdrant. Includes similarity lookup endpoint."
+    ),
+)
 logger = logging.getLogger(__name__)
 
 
@@ -31,7 +56,12 @@ def health() -> HealthStatus:
     return HealthStatus(status="ok")
 
 
-@app.post("/similar", response_model=SimilarResponse)
+@app.post(
+    "/similar",
+    response_model=SimilarResponse,
+    summary="Find similar screenshots",
+    tags=["similarity"],
+)
 async def find_similar(
     request: SimilarRequest,
     http_request: Request,
@@ -135,3 +165,96 @@ async def find_similar(
             },
         )
         raise
+
+
+@app.post(
+    "/ingest",
+    response_model=IngestResponse,
+    summary="Ingest and index screenshot",
+    tags=["ingest"],
+)
+async def ingest_screen(
+    request: IngestRequest,
+    http_request: Request,
+    settings: BackendSettings = Depends(get_settings),
+    client=Depends(provide_minio_client),
+) -> IngestResponse:
+    correlation_id = http_request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    start_time = time.perf_counter()
+
+    logger.info(
+        "Received ingest request",
+        extra={
+            "event": "backend.ingest.request",
+            "correlation_id": correlation_id,
+            "bucket": request.source.bucket,
+            "object_key": request.source.object_key,
+        },
+    )
+
+    # Ensure buckets exist
+    await ensure_bucket(client, request.source.bucket, correlation_id=correlation_id)
+    await ensure_bucket(client, settings.minio_processed_bucket, correlation_id=correlation_id)
+
+    # Fetch and process
+    data = await fetch_object_bytes(client, request.source, correlation_id=correlation_id)
+    try:
+        processed_bytes, content_type, ext = process_image_bytes(data, target_width=585)
+    except ValueError as exc:
+        logger.warning(
+            "Invalid image content during ingest",
+            extra={
+                "event": "backend.ingest.invalid_image",
+                "correlation_id": correlation_id,
+                "bucket": request.source.bucket,
+                "object_key": request.source.object_key,
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=str(exc),
+        ) from exc
+
+    processed_key = build_processed_key(request.source.object_key, ext)
+    processed_ref = MinioObjectReference(bucket=settings.minio_processed_bucket, object_key=processed_key)
+
+    await upload_object_bytes(
+        client,
+        processed_ref.bucket,
+        processed_ref.object_key,
+        processed_bytes,
+        content_type,
+        correlation_id=correlation_id,
+    )
+
+    # Embed processed image
+    embed_response = await fetch_embedding(processed_ref, settings=settings, correlation_id=correlation_id)
+
+    # Upsert to Qdrant
+    payload = {
+        "source_bucket": request.source.bucket,
+        "source_key": request.source.object_key,
+        "processed_bucket": processed_ref.bucket,
+        "processed_key": processed_ref.object_key,
+    }
+    await upsert_vector_point(embed_response.vector, payload, settings=settings)
+
+    duration_ms = (time.perf_counter() - start_time) * 1000
+    logger.info(
+        "Ingest completed",
+        extra={
+            "event": "backend.ingest.completed",
+            "correlation_id": correlation_id,
+            "duration_ms": round(duration_ms, 2),
+            "source_bucket": request.source.bucket,
+            "source_key": request.source.object_key,
+            "processed_bucket": processed_ref.bucket,
+            "processed_key": processed_ref.object_key,
+        },
+    )
+
+    return IngestResponse(
+        processed=processed_ref,
+        embedding_model=embed_response.model,
+        embedding_dimension=embed_response.dimension,
+    )
