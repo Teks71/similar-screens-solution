@@ -1,6 +1,10 @@
+import json
 import logging
+import math
+import os
 import time
 import uuid
+from collections.abc import Sequence
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -37,8 +41,65 @@ app = FastAPI(
 logger = logging.getLogger(__name__)
 
 
+def _extract_vector(vector: object) -> list[float] | None:
+    if vector is None:
+        return None
+    if isinstance(vector, Sequence) and not isinstance(vector, (str, bytes, bytearray)):
+        try:
+            return [float(v) for v in vector]  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return None
+    if isinstance(vector, dict):
+        # Named vectors: pick the first entry
+        first_value = next(iter(vector.values()), None)
+        if first_value is None:
+            return None
+        try:
+            return [float(v) for v in first_value]  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _cosine_similarity(vec_a: list[float], vec_b: list[float]) -> float:
+    if not vec_a or not vec_b or len(vec_a) != len(vec_b):
+        return 0.0
+    dot = sum(a * b for a, b in zip(vec_a, vec_b))
+    norm_a = math.sqrt(sum(a * a for a in vec_a))
+    norm_b = math.sqrt(sum(b * b for b in vec_b))
+    if norm_a == 0.0 or norm_b == 0.0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+def _deduplicate_points(points: list, *, desired: int, threshold: float = 0.999) -> list:
+    unique: list = []
+    for point in points:
+        candidate_vec = _extract_vector(getattr(point, "vector", None))
+        is_duplicate = False
+        if candidate_vec is not None:
+            for kept in unique:
+                kept_vec = _extract_vector(getattr(kept, "vector", None))
+                if kept_vec is None:
+                    continue
+                if _cosine_similarity(candidate_vec, kept_vec) >= threshold:
+                    is_duplicate = True
+                    break
+
+        if not is_duplicate:
+            unique.append(point)
+
+        if len(unique) >= desired:
+            break
+
+    return unique
+
+
 @app.on_event("startup")
 async def startup() -> None:
+    log_level = os.getenv("BACKEND_LOG_LEVEL", "INFO").upper()
+    logging.basicConfig(level=log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    logger.info("Logging configured", extra={"event": "backend.logging.configured", "level": log_level})
     await ping_database()
     await init_qdrant_collection()
 
@@ -120,8 +181,24 @@ async def find_similar(
         )
 
         # Search for nearest neighbors
-        limit = request.top_k or 10
-        scored_points = await search_similar_points(embed_response.vector, limit=limit, settings=settings)
+        resolved_limit = request.top_k or settings.similar_results_limit
+        if resolved_limit <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Requested top_k must be a positive integer",
+            )
+        prefetch_limit = math.ceil(resolved_limit * settings.similar_prefetch_multiplier)
+        scored_points = await search_similar_points(
+            embed_response.vector,
+            limit=prefetch_limit,
+            include_vectors=True,
+            settings=settings,
+        )
+        deduped_points = _deduplicate_points(scored_points, desired=resolved_limit)
+        logger.info(
+            f"backend.similar.post_filter {json.dumps({'correlation_id': correlation_id, 'requested_top_k': request.top_k, 'resolved_top_k': resolved_limit, 'prefetch_limit': prefetch_limit, 'qdrant_returned': len(scored_points), 'deduped': len(deduped_points)})}"
+        )
+        scored_points = deduped_points
 
         results: list[SimilarResult] = []
         for point in scored_points:
@@ -159,6 +236,8 @@ async def find_similar(
                 "success": True,
                 "duration_ms": round(duration_ms, 2),
                 "results_count": len(response.results),
+                "resolved_top_k": resolved_limit,
+                "prefetch_limit": prefetch_limit,
                 "result_object_keys": [
                     result.object.object_key
                     for result in response.results

@@ -50,6 +50,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_URL: ${POSTGRES_URL:-postgresql+asyncpg://postgres:postgres@postgres:5432/similar_screens}
+      SIMILAR_TOP_K: ${SIMILAR_TOP_K}
     ports:
       - "${BACKEND_HOST:-0.0.0.0}:${BACKEND_PORT:-8000}:8000"
     depends_on:
@@ -70,7 +71,7 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_USER_BUCKET: ${MINIO_USER_BUCKET}
       MINIO_SECURE: ${MINIO_SECURE:-false}
-      SIMILAR_TOP_K: ${SIMILAR_TOP_K:-5}
+      SIMILAR_TOP_K: ${SIMILAR_TOP_K}
     depends_on:
       - backend
 

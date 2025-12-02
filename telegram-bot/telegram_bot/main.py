@@ -270,8 +270,8 @@ async def send_gallery(
     response: SimilarResponse,
     minio_client: Minio,
 ) -> None:
-    media_group = await build_media_group(response.results, minio_client)
-    if not media_group:
+    media_items = await build_media_group(response.results, minio_client)
+    if not media_items:
         logger.warning(
             "No media generated for similarity response",
             extra={
@@ -282,14 +282,44 @@ async def send_gallery(
         await message.answer("Не удалось собрать результаты для отправки пользователю.")
         return
 
+    # Telegram limits media groups to 10 items, so send in batches.
+    batch_size = 10
     try:
-        await message.answer_media_group(media_group)
+        for offset in range(0, len(media_items), batch_size):
+            chunk = media_items[offset : offset + batch_size]
+            try:
+                await message.answer_media_group(chunk)
+            except Exception:
+                logger.warning(
+                    "Failed to send media group chunk, will retry items individually",
+                    exc_info=True,
+                    extra={
+                        "event": "bot.response.media_group.chunk_failed",
+                        **_message_context(message),
+                        "chunk_size": len(chunk),
+                    },
+                )
+                for item in chunk:
+                    try:
+                        await message.answer_photo(item.media, caption=item.caption)
+                    except Exception:
+                        logger.warning(
+                            "Failed to send individual media item",
+                            exc_info=True,
+                            extra={
+                                "event": "bot.response.media_group.item_failed",
+                                **_message_context(message),
+                                "caption": item.caption,
+                            },
+                        )
+
         logger.info(
             "Sent media group with similar screenshots",
             extra={
                 "event": "bot.response.media_group",
                 **_message_context(message),
-                "media_count": len(media_group),
+                "media_count": len(media_items),
+                "batches": (len(media_items) + batch_size - 1) // batch_size,
                 "trigger_message_id": message.message_id,
             },
         )

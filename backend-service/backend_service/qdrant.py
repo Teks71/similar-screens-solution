@@ -192,6 +192,7 @@ async def search_similar_points(
     vector: list[float],
     *,
     limit: int = 10,
+    include_vectors: bool = False,
     settings: Optional[BackendSettings] = None,
 ) -> list[ScoredPoint]:
     client = get_qdrant_client(settings)
@@ -206,7 +207,7 @@ async def search_similar_points(
                 query_vector=vector,
                 limit=limit,
                 with_payload=True,
-                with_vectors=False,
+                with_vectors=include_vectors,
             )
         # Fallback for client versions without .search
         response = await asyncio.to_thread(
@@ -215,7 +216,7 @@ async def search_similar_points(
             query=vector,
             limit=limit,
             with_payload=True,
-            with_vectors=False,
+            with_vectors=include_vectors,
         )
         return response.points  # type: ignore[attr-defined]
     except Exception:

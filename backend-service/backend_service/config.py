@@ -50,6 +50,8 @@ class BackendSettings:
 
         self.embedding_service_url = os.getenv("EMBEDDING_SERVICE_URL")
         self.cdn_url_template = os.getenv("CDN_URL_TEMPLATE", "https://cdn.screenoteka.com/{key}")
+        self.similar_results_limit = self._int_from_env("SIMILAR_TOP_K")
+        self.similar_prefetch_multiplier = self._int_from_env("SIMILAR_PREFETCH_MULTIPLIER", default=5)
 
         missing = [
             key
@@ -75,6 +77,14 @@ class BackendSettings:
 
         if self.qdrant_vector_size is None:
             missing.append("QDRANT_VECTOR_SIZE (int)")
+        if self.similar_results_limit is None:
+            missing.append("SIMILAR_TOP_K (int)")
+        elif self.similar_results_limit <= 0:
+            raise RuntimeError("SIMILAR_TOP_K must be a positive integer")
+        if self.similar_prefetch_multiplier is None:
+            missing.append("SIMILAR_PREFETCH_MULTIPLIER (int)")
+        elif self.similar_prefetch_multiplier <= 0:
+            raise RuntimeError("SIMILAR_PREFETCH_MULTIPLIER must be a positive integer")
 
         if missing:
             raise RuntimeError(f"Missing required backend settings: {', '.join(sorted(missing))}")
@@ -94,10 +104,10 @@ class BackendSettings:
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
-    def _int_from_env(self, key: str) -> int | None:
+    def _int_from_env(self, key: str, default: int | None = None) -> int | None:
         raw = os.getenv(key)
         if raw is None:
-            return None
+            return default
         try:
             return int(raw)
         except ValueError as exc:

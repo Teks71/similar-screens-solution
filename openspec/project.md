@@ -47,6 +47,11 @@
   изменениях окружения или конфигурации, включая порты и переменные embedding-service.
 - embedding-service требует доступности CUDA-устройства, настроенных переменных для MinIO (`MINIO_*`, при необходимости `MINIO_ALLOWED_BUCKET`) и параметров модели (`EMBEDDING_MODEL_NAME`, `EMBEDDING_DEVICE`).
 
+## Logging
+- Backend: уровень логирования задаётся переменной `BACKEND_LOG_LEVEL` (по умолчанию INFO) через `logging.basicConfig` с форматом `%(asctime)s %(levelname)s %(name)s %(message)s`.
+- Для структурированных данных включайте JSON прямо в текст сообщения (например, `logger.info(f"event {json.dumps(payload)}")`), чтобы поля попадали в stdout контейнера без зависимости от formatter-а.
+- Держите прикладные логи на INFO/DEBUG для диагностики, WARN/ERROR — для ошибок; access-логи uvicorn остаются отдельным потоком.
+
 ## External Dependencies
 - Telegram Bot API (требуется токен в переменной окружения `TELEGRAM_BOT_TOKEN`).
 - Внешний сервер MinIO (необходимы URL/регион, ключ и секрет доступа в переменных окружения бэкенда и embedding-service).

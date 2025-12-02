@@ -42,8 +42,15 @@ class BotSettings:
         if missing:
             raise RuntimeError(f"Missing required bot settings: {', '.join(sorted(missing))}")
 
-        default_top_k = os.getenv("SIMILAR_TOP_K")
-        top_k_value = int(default_top_k) if default_top_k else 5
+        raw_top_k = os.getenv("SIMILAR_TOP_K")
+        if raw_top_k is None:
+            raise RuntimeError("Missing required bot settings: SIMILAR_TOP_K")
+        try:
+            top_k_value = int(raw_top_k)
+        except ValueError as exc:
+            raise RuntimeError("SIMILAR_TOP_K must be a positive integer") from exc
+        if top_k_value <= 0:
+            raise RuntimeError("SIMILAR_TOP_K must be a positive integer")
 
         return cls(
             token=os.environ["TELEGRAM_BOT_TOKEN"],
