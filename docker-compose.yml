@@ -35,6 +35,7 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_USER_BUCKET: ${MINIO_USER_BUCKET}
       MINIO_PROCESSED_BUCKET: ${MINIO_PROCESSED_BUCKET:-similar-screens-processed}
+      MINIO_QUERY_BUCKET: ${MINIO_QUERY_BUCKET:-similar-screens-queries}
       MINIO_SECURE: ${MINIO_SECURE:-false}
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-screens}
@@ -42,6 +43,7 @@ services:
       QDRANT_DISTANCE: ${QDRANT_DISTANCE:-cosine}
       QDRANT_API_KEY: ${QDRANT_API_KEY:-}
       EMBEDDING_SERVICE_URL: ${EMBEDDING_SERVICE_URL:-http://embedding-service:8001}
+      CDN_URL_TEMPLATE: ${CDN_URL_TEMPLATE:-https://cdn.screenoteka.com/{key}}
       POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
       POSTGRES_DB: ${POSTGRES_DB:-similar_screens}

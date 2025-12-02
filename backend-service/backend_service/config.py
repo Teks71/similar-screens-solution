@@ -32,6 +32,7 @@ class BackendSettings:
         self.minio_secret_key = os.getenv("MINIO_SECRET_KEY")
         self.minio_user_bucket = os.getenv("MINIO_USER_BUCKET") or os.getenv("MINIO_BUCKET")
         self.minio_processed_bucket = os.getenv("MINIO_PROCESSED_BUCKET")
+        self.minio_query_bucket = os.getenv("MINIO_QUERY_BUCKET") or f"{self.minio_processed_bucket}-queries"
         self.minio_secure = _bool_from_env("MINIO_SECURE", default=False)
 
         self.postgres_host = os.getenv("POSTGRES_HOST")
@@ -48,6 +49,7 @@ class BackendSettings:
         self.qdrant_vector_size = self._int_from_env("QDRANT_VECTOR_SIZE")
 
         self.embedding_service_url = os.getenv("EMBEDDING_SERVICE_URL")
+        self.cdn_url_template = os.getenv("CDN_URL_TEMPLATE", "https://cdn.screenoteka.com/{key}")
 
         missing = [
             key
@@ -57,9 +59,11 @@ class BackendSettings:
                 "MINIO_SECRET_KEY": self.minio_secret_key,
                 "MINIO_USER_BUCKET": self.minio_user_bucket,
                 "MINIO_PROCESSED_BUCKET": self.minio_processed_bucket,
+                "MINIO_QUERY_BUCKET": self.minio_query_bucket,
                 "QDRANT_URL": self.qdrant_url,
                 "QDRANT_COLLECTION": self.qdrant_collection,
                 "EMBEDDING_SERVICE_URL": self.embedding_service_url,
+                "CDN_URL_TEMPLATE": self.cdn_url_template,
             }.items()
             if not value
         ]

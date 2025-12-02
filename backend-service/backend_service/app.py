@@ -1,6 +1,7 @@
 import logging
 import time
 import uuid
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 
@@ -18,15 +19,12 @@ from .database import close_database, ping_database
 from .qdrant import close_qdrant_client, init_qdrant_collection
 from .storage import (
     ensure_bucket,
-    presign_url,
     provide_minio_client,
     verify_source_object,
-    fetch_object_bytes,
-    upload_object_bytes,
 )
-from .image_processing import process_image_bytes, build_processed_key
 from .embed_client import fetch_embedding
-from .qdrant import upsert_vector_point
+from .qdrant import upsert_vector_point, search_similar_points
+from .pipeline import ImageProcessingPipeline
 
 app = FastAPI(
     title="Similar Screens Backend",
@@ -71,6 +69,8 @@ async def find_similar(
     correlation_id = http_request.headers.get("X-Request-ID") or str(uuid.uuid4())
     start_time = time.perf_counter()
 
+    pipeline = ImageProcessingPipeline(client)
+
     logger.info(
         "Received similarity request",
         extra={
@@ -103,22 +103,51 @@ async def find_similar(
 
         await ensure_bucket(client, request.source.bucket, correlation_id=correlation_id)
         await verify_source_object(client, request.source, correlation_id=correlation_id)
-        presigned_url = str(
-            await presign_url(client, request.source, correlation_id=correlation_id)
+
+        # Preprocess query image and store in dedicated bucket
+        try:
+            query_processed_ref, _ = await pipeline.preprocess_and_store(
+                request.source,
+                settings.minio_query_bucket,
+                correlation_id=correlation_id,
+            )
+        except HTTPException:
+            raise
+
+        # Embed processed query image
+        embed_response = await fetch_embedding(
+            query_processed_ref, settings=settings, correlation_id=correlation_id
         )
 
-        score = 1.0
-        results = [
-            SimilarResult(
-                score=score,
-                title="Uploaded screenshot",
-                url=presigned_url,
-                object=request.source,
-            )
-        ]
+        # Search for nearest neighbors
+        limit = request.top_k or 10
+        scored_points = await search_similar_points(embed_response.vector, limit=limit, settings=settings)
 
-        top_k = request.top_k or len(results)
-        response = SimilarResponse(results=results[:top_k])
+        results: list[SimilarResult] = []
+        for point in scored_points:
+            payload = point.payload or {}
+            source_key = payload.get("source_key")
+            source_bucket = payload.get("source_bucket")
+            title = payload.get("title") or (Path(source_key).name if source_key else None)
+
+            if not source_key:
+                continue
+
+            cdn_url = settings.cdn_url_template.format(key=source_key)
+            object_ref = None
+            if source_bucket:
+                object_ref = MinioObjectReference(bucket=source_bucket, object_key=source_key)
+
+            results.append(
+                SimilarResult(
+                    score=point.score,
+                    title=title,
+                    url=cdn_url,
+                    object=object_ref,
+                )
+            )
+
+        response = SimilarResponse(results=results)
 
         duration_ms = (time.perf_counter() - start_time) * 1000
         logger.info(
@@ -182,6 +211,8 @@ async def ingest_screen(
     correlation_id = http_request.headers.get("X-Request-ID") or str(uuid.uuid4())
     start_time = time.perf_counter()
 
+    pipeline = ImageProcessingPipeline(client)
+
     logger.info(
         "Received ingest request",
         extra={
@@ -192,40 +223,15 @@ async def ingest_screen(
         },
     )
 
-    # Ensure buckets exist
-    await ensure_bucket(client, request.source.bucket, correlation_id=correlation_id)
-    await ensure_bucket(client, settings.minio_processed_bucket, correlation_id=correlation_id)
-
-    # Fetch and process
-    data = await fetch_object_bytes(client, request.source, correlation_id=correlation_id)
     try:
-        processed_bytes, content_type, ext = process_image_bytes(data, target_width=585)
-    except ValueError as exc:
-        logger.warning(
-            "Invalid image content during ingest",
-            extra={
-                "event": "backend.ingest.invalid_image",
-                "correlation_id": correlation_id,
-                "bucket": request.source.bucket,
-                "object_key": request.source.object_key,
-            },
+        processed_ref, _content_type = await pipeline.preprocess_and_store(
+            request.source,
+            settings.minio_processed_bucket,
+            correlation_id=correlation_id,
         )
-        raise HTTPException(
-            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail=str(exc),
-        ) from exc
-
-    processed_key = build_processed_key(request.source.object_key, ext)
-    processed_ref = MinioObjectReference(bucket=settings.minio_processed_bucket, object_key=processed_key)
-
-    await upload_object_bytes(
-        client,
-        processed_ref.bucket,
-        processed_ref.object_key,
-        processed_bytes,
-        content_type,
-        correlation_id=correlation_id,
-    )
+    except HTTPException:
+        # Already logged inside pipeline
+        raise
 
     # Embed processed image
     embed_response = await fetch_embedding(processed_ref, settings=settings, correlation_id=correlation_id)
@@ -236,6 +242,7 @@ async def ingest_screen(
         "source_key": request.source.object_key,
         "processed_bucket": processed_ref.bucket,
         "processed_key": processed_ref.object_key,
+        "title": ImageProcessingPipeline.derive_title(request.source.object_key),
     }
     await upsert_vector_point(embed_response.vector, payload, settings=settings)
 

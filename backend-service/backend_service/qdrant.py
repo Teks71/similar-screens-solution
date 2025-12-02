@@ -8,6 +8,7 @@ from qdrant_client.conversions import common_types
 from qdrant_client.http import models as rest
 from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.http.models import Distance, VectorParams
+from qdrant_client.http.models import ScoredPoint
 
 from .config import BackendSettings, get_settings
 
@@ -181,6 +182,47 @@ async def upsert_vector_point(
             "Failed to upsert point into Qdrant",
             extra={
                 "event": "backend.qdrant.upsert_failed",
+                "collection": collection,
+            },
+        )
+        raise
+
+
+async def search_similar_points(
+    vector: list[float],
+    *,
+    limit: int = 10,
+    settings: Optional[BackendSettings] = None,
+) -> list[ScoredPoint]:
+    client = get_qdrant_client(settings)
+    settings = settings or get_settings()
+    collection = settings.qdrant_collection
+
+    try:
+        if hasattr(client, "search"):
+            return await asyncio.to_thread(
+                client.search,
+                collection_name=collection,
+                query_vector=vector,
+                limit=limit,
+                with_payload=True,
+                with_vectors=False,
+            )
+        # Fallback for client versions without .search
+        response = await asyncio.to_thread(
+            client.query_points,
+            collection_name=collection,
+            query=vector,
+            limit=limit,
+            with_payload=True,
+            with_vectors=False,
+        )
+        return response.points  # type: ignore[attr-defined]
+    except Exception:
+        logger.exception(
+            "Failed to search similar points in Qdrant",
+            extra={
+                "event": "backend.qdrant.search_failed",
                 "collection": collection,
             },
         )
